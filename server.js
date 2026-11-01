@@ -47,36 +47,56 @@ if (isNativeExpress) {
   app.use(express.urlencoded({ extended: true }));
   app.use(express.static(PUBLIC_DIR));
 
-  // Mount API Routes
+  // Mount API Routes (supports both /api/* and root paths for Vercel/proxies)
   app.use('/api/auth', authRoutes);
+  app.use('/auth', authRoutes);
+
   app.use('/api/events', eventRoutes);
+  app.use('/events', eventRoutes);
+
   app.use('/api/budget', budgetRoutes);
+  app.use('/budget', budgetRoutes);
+
   app.use('/api/vendors', vendorRoutes);
+  app.use('/vendors', vendorRoutes);
+
   app.use('/api/timeline', timelineRoutes);
+  app.use('/timeline', timelineRoutes);
+
   app.use('/api/ai', aiRoutes);
+  app.use('/ai', aiRoutes);
+
+  // Health check routes
+  app.get('/api/health', (req, res) => res.json({ status: 'ok', server: 'Gatherly Express', timestamp: new Date().toISOString() }));
+  app.get('/health', (req, res) => res.json({ status: 'ok', server: 'Gatherly Express', timestamp: new Date().toISOString() }));
 
   // Fallback to index.html for SPA
   app.get('*', (req, res) => {
     res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
   });
 
-  const server = app.listen(PORT, () => {
-    console.log(`\n======================================================`);
-    console.log(`  GATHERLY - GenAI Event Planning Assistant Server`);
-    console.log(`  Running with Express.js at: http://localhost:${PORT}`);
-    console.log(`======================================================\n`);
-  });
+  // Only bind port when running locally, NOT during Vercel serverless function invocation
+  if (!process.env.VERCEL) {
+    const server = app.listen(PORT, () => {
+      console.log(`\n======================================================`);
+      console.log(`  GATHERLY - GenAI Event Planning Assistant Server`);
+      console.log(`  Running with Express.js at: http://localhost:${PORT}`);
+      console.log(`======================================================\n`);
+    });
 
-  server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      console.log(`\n[Gatherly Notice] Port ${PORT} is already active and serving Gatherly!`);
-      console.log(`Open in browser: http://localhost:${PORT}\n`);
-    } else {
-      console.error(err);
-    }
-  });
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.log(`\n[Gatherly Notice] Port ${PORT} is already active and serving Gatherly!`);
+        console.log(`Open in browser: http://localhost:${PORT}\n`);
+      } else {
+        console.error(err);
+      }
+    });
 
-  module.exports = { app, server };
+    app.server = server;
+  }
+
+  module.exports = app;
 } else {
   // Built-in Express-compatible pure Node.js Server
   console.log(`[Gatherly] Running in zero-dependency Node.js engine (Node ${process.version})`);
@@ -126,7 +146,7 @@ if (isNativeExpress) {
     };
   }
 
-  const server = http.createServer(async (req, res) => {
+  const requestHandler = async (req, res) => {
     enhanceResponse(res);
 
     // CORS preflight
@@ -304,28 +324,33 @@ if (isNativeExpress) {
       console.error('API Server error:', err);
       res.status(500).json({ success: false, message: 'Server processing error', error: err.message });
     }
-  });
+  };
 
-  server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
+  const server = http.createServer(requestHandler);
+
+  if (!process.env.VERCEL) {
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.log(`\n======================================================`);
+        console.log(`  GATHERLY - GenAI Event Planning Assistant Server`);
+        console.log(`  Port ${PORT} is already active and serving Gatherly!`);
+        console.log(`  Open in your browser: http://localhost:${PORT}`);
+        console.log(`======================================================\n`);
+        process.exit(0);
+      } else {
+        console.error('API Server error:', err);
+      }
+    });
+
+    server.listen(PORT, '0.0.0.0', () => {
       console.log(`\n======================================================`);
       console.log(`  GATHERLY - GenAI Event Planning Assistant Server`);
-      console.log(`  Port ${PORT} is already active and serving Gatherly!`);
-      console.log(`  Open in your browser: http://localhost:${PORT}`);
+      console.log(`  Live at: http://localhost:${PORT}`);
       console.log(`======================================================\n`);
-      process.exit(0);
-    } else {
-      console.error('API Server error:', err);
-    }
-  });
+    });
+  }
 
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n======================================================`);
-    console.log(`  GATHERLY - GenAI Event Planning Assistant Server`);
-    console.log(`  Live at: http://localhost:${PORT}`);
-    console.log(`======================================================\n`);
-  });
-
-  module.exports = { server };
+  requestHandler.server = server;
+  module.exports = requestHandler;
 }
 

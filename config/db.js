@@ -15,6 +15,13 @@ async function connectDB() {
     return false;
   }
 
+  // In cloud/Vercel serverless mode without a custom Atlas URI, use internal document engine immediately
+  if (process.env.VERCEL && (!MONGODB_URI || MONGODB_URI.includes('localhost'))) {
+    console.log('[Gatherly DB] Vercel deployment detected without remote MongoDB Atlas URI. Operating with fast JSON/in-memory store.');
+    isConnected = false;
+    return false;
+  }
+
   try {
     // Attempt Mongoose connection with 3-second timeout
     await mongoose.connect(MONGODB_URI, {

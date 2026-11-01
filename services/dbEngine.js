@@ -3,7 +3,11 @@ const path = require('path');
 const crypto = require('crypto');
 const { hashPassword } = require('./security');
 
-const DATA_DIR = path.resolve(__dirname, '..', 'data');
+// Use /tmp directory on Vercel/serverless where standard filesystem is read-only
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const DATA_DIR = isServerless 
+  ? path.join('/tmp', 'gatherly_data') 
+  : path.resolve(__dirname, '..', 'data');
 const DB_FILE = path.join(DATA_DIR, 'gatherly_db.json');
 
 // Generate 24-character hex ObjectId matching MongoDB format
@@ -26,32 +30,43 @@ class DBEngine {
   }
 
   init() {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        try {
+          fs.mkdirSync(DATA_DIR, { recursive: true });
+        } catch (e) {
+          // Read-only filesystem, continue with in-memory store
+        }
+      }
 
-    if (fs.existsSync(DB_FILE)) {
-      try {
-        const raw = fs.readFileSync(DB_FILE, 'utf8');
-        this.data = JSON.parse(raw);
-        // If data is empty or old demo, seed with Indian context
-        if (!this.data.events || this.data.events.length === 0 || this.data.events[0]?.location?.includes('Napa Valley')) {
+      if (fs.existsSync(DB_FILE)) {
+        try {
+          const raw = fs.readFileSync(DB_FILE, 'utf8');
+          this.data = JSON.parse(raw);
+          if (!this.data.events || this.data.events.length === 0 || this.data.events[0]?.location?.includes('Napa Valley')) {
+            this.seedInitialData();
+          }
+        } catch (err) {
+          console.warn('[Gatherly DB] Initializing fresh dataset:', err.message);
           this.seedInitialData();
         }
-      } catch (err) {
-        console.error('Error loading DB file, initializing new:', err.message);
+      } else {
         this.seedInitialData();
       }
-    } else {
+    } catch (outerErr) {
+      console.warn('[Gatherly DB] Operating purely in-memory:', outerErr.message);
       this.seedInitialData();
     }
   }
 
   save() {
     try {
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
       fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf8');
     } catch (err) {
-      console.error('Failed to save DB file:', err.message);
+      // In-memory changes persist during runtime
     }
   }
 
