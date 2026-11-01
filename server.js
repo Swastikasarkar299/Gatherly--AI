@@ -67,6 +67,15 @@ if (isNativeExpress) {
     console.log(`======================================================\n`);
   });
 
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.log(`\n[Gatherly Notice] Port ${PORT} is already active and serving Gatherly!`);
+      console.log(`Open in browser: http://localhost:${PORT}\n`);
+    } else {
+      console.error(err);
+    }
+  });
+
   module.exports = { app, server };
 } else {
   // Built-in Express-compatible pure Node.js Server
@@ -294,6 +303,19 @@ if (isNativeExpress) {
     } catch (err) {
       console.error('API Server error:', err);
       res.status(500).json({ success: false, message: 'Server processing error', error: err.message });
+    }
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.log(`\n======================================================`);
+      console.log(`  GATHERLY - GenAI Event Planning Assistant Server`);
+      console.log(`  Port ${PORT} is already active and serving Gatherly!`);
+      console.log(`  Open in your browser: http://localhost:${PORT}`);
+      console.log(`======================================================\n`);
+      process.exit(0);
+    } else {
+      console.error('API Server error:', err);
     }
   });
 

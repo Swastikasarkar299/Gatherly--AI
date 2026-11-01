@@ -7,8 +7,8 @@ echo    Starting Gatherly - GenAI Event Planning Assistant
 echo ======================================================
 echo.
 
-:: Ensure node is accessible using bin\node.cmd wrapper if needed
-set PATH=%~dp0bin;%PATH%
+:: Ensure node and npm are accessible
+set PATH=C:\Program Files\nodejs;%~dp0bin;%PATH%
 
 :: Start the server in the background
 start "Gatherly Server" cmd /k "node server.js"
